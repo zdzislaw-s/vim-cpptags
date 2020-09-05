@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# vim: set fileencoding=utf-8 :
 #
 # MIT License
 #
@@ -146,13 +147,13 @@ class Settings(object):
             "-Y", "--no-include-system-includes",
             action="store_true",
             default=not Settings.shouldIncludeSystemIncludes,
-            help="Dont't include in the output tagfile the tags that were discovered while processing system includes. For the option to be in effect, the system include directory has to be specified with the '-i' option."
+            help="Don't include in the output tagfile the tags that were collected while processing system includes. For the option to be in effect, the system include directory has to be specified with the '-i' option."
         )
         parser.add_argument(
             "-C", "--no-use-ctags",
             action="store_true",
             default=not Settings.shouldUseCtags,
-            help="Dont't use ctags to discover macro definitions."
+            help="Don't use ctags to collect macro definitions."
         )
         parser.add_argument(
             "-o",
@@ -165,7 +166,7 @@ class Settings(object):
             "-t", "--tagfile",
             metavar="<filename>",
             default=Settings.inputTagfile,
-            help="Input tagfile. The puropose of this option is to allow incremental updates of tagfiles - when this option is specified the discovery of tags is limited to input C++ source files exclusively, i.e. the logic for discovering tags from files that are directly or indirectly #included is disabled."
+            help="Input tagfile. The purpose of this option is to allow incremental updates of tagfiles. When this option is specified the collection of tags is limited to the input C++ source files exclusively, i.e. the logic for collecting tags from files that are directly or indirectly #included is disabled."
         )
         parser.add_argument(
             "filenames",
@@ -466,7 +467,7 @@ def main(argv):
 
     Arguments:
     argv -- array with arguments that were provided on the command line when the
-            scipt was invoked.
+            script was invoked.
     Return:
     0 -- on success
     """
