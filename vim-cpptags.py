@@ -59,7 +59,7 @@ class Settings(object):
     defines = []
     userIncludes = []
     systemIncludes = []
-    shouldIncludeSystemIncludes = True
+    shouldCollectSystemIncludes = True
     shouldUseCtags = True
     outputFilename = ""
     inputTagfile = ""
@@ -144,10 +144,10 @@ class Settings(object):
             help="System include directory that is passed to clang as the -I option. Can be specified multiple times."
         )
         parser.add_argument(
-            "-Y", "--no-include-system-includes",
+            "-Y", "--no-collect-system-includes",
             action="store_true",
-            default=not Settings.shouldIncludeSystemIncludes,
-            help="Don't include in the output tagfile the tags that were collected while processing system includes. For the option to be in effect, the system include directory has to be specified with the '-i' option."
+            default=not Settings.shouldCollectSystemIncludes,
+            help="Don't collect tags from system includes. For the option to be in effect, the system include directory has to be specified with the '-i' option."
         )
         parser.add_argument(
             "-C", "--no-use-ctags",
@@ -183,7 +183,7 @@ class Settings(object):
         Settings.defines = args.defines
         Settings.userIncludes = args.user_includes
         Settings.systemIncludes = args.system_includes
-        Settings.shouldIncludeSystemIncludes = not args.no_include_system_includes
+        Settings.shouldCollectSystemIncludes = not args.no_collect_system_includes
         Settings.shouldUseCtags = not args.no_use_ctags
         Settings.outputFilename = args.output_filename
         Settings.inputTagfile = args.tagfile
@@ -227,7 +227,7 @@ class Collector(object):
                     ),
                     None
                 ) is None
-                if not Settings.shouldIncludeSystemIncludes else True
+                if not Settings.shouldCollectSystemIncludes else True
             ) and
             (len(child.spelling) > 0) and
             (child.is_definition() if child.kind in Settings.fieldsDefs else True) and

@@ -31,9 +31,8 @@ optional arguments:
                         -I option. Can be specified multiple times.
   -i <include dir>      System include directory that is passed to clang as
                         the -I option. Can be specified multiple times.
-  -Y, --no-include-system-includes
-                        Don't include in the output tagfile the tags that were
-                        collected while processing system includes. For the
+  -Y, --no-collect-system-includes
+                        Don't collect tags from system includes. For the
                         option to be in effect, the system include directory
                         has to be specified with the '-i' option.
   -C, --no-use-ctags    Don't use ctags to collect macro definitions.
