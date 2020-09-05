@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 #
-# Copyright 2020 Zdzislaw Sliwinski
+# MIT License
+#
+# Copyright (c) 2020 Zdzisław Śliwiński
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
