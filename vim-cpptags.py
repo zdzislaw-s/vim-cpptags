@@ -342,6 +342,7 @@ class Collector(object):
         tags are sorted. (Note: when the tags are *not* sorted, there should be
         no duplicates already).
         """
+
         lastTag = None
         for i in range(len(self.tags)):
             if Settings.shouldSort:
@@ -409,7 +410,7 @@ class Collector(object):
 
 class Writer(object):
     """
-    Base class for Writer objects.
+    Base class for Writer classes.
     """
 
     def __init__(self, fo):
