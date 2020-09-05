@@ -474,7 +474,7 @@ def main(argv):
 ),
 '!_TAG_PROGRAM_AUTHOR\tZdzislaw Sliwinski\t//',
 '!_TAG_PROGRAM_NAME\t%s\t//' % (os.path.basename(argv[0])),
-'!_TAG_PROGRAM_URL\thttp://github.com/zdzislaw-s/vim-ctags\t//'
+'!_TAG_PROGRAM_URL\thttp://github.com/zdzislaw-s/vim-cpptags\t//'
     ])
 
     collector.writeTags(writer)
