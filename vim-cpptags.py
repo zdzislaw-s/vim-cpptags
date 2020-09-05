@@ -59,6 +59,7 @@ class Settings(object):
     shouldIncludeSystemIncludes = True
     shouldUseCtags = True
     outputFilename = ""
+    inputTagfile = ""
     inputFilenames = []
     fieldsDefs = {
         CursorKind.CLASS_DECL: "class-def",
@@ -81,6 +82,8 @@ class Settings(object):
         CursorKind.VAR_DECL: "var-decl"
     }
     fields.update(fieldsDefs)
+    reTagEntry = re.compile('^([^\t]+)\t([^\t]+)\t([^\t]+);"\t(.*)$')
+    currentFilename = ""
 
     @staticmethod
     def parseArgv(argv):
@@ -157,6 +160,12 @@ class Settings(object):
             help="Output filename. The tags are written to stdout if this option is not specified."
         )
         parser.add_argument(
+            "-t", "--tagfile",
+            metavar="<filename>",
+            default=Settings.inputTagfile,
+            help="Input tagfile. The puropose of this option is to allow incremental updates of tagfiles - when this option is specified the discovery of tags is limited to input C++ source files exclusively, i.e. the logic for discovering tags from files that are directly or indirectly #included is disabled."
+        )
+        parser.add_argument(
             "filenames",
             metavar="<input file>",
             nargs="+",
@@ -174,6 +183,7 @@ class Settings(object):
         Settings.shouldIncludeSystemIncludes = not args.no_include_system_includes
         Settings.shouldUseCtags = not args.no_use_ctags
         Settings.outputFilename = args.output_filename
+        Settings.inputTagfile = args.tagfile
         Settings.inputFilenames = args.filenames
 
 class Collector(object):
@@ -225,6 +235,10 @@ class Collector(object):
                     child.semantic_parent.kind == CursorKind.STRUCT_DECL
                 )
                 if child.kind == CursorKind.VAR_DECL else True
+            ) and
+            (
+                (child.location.file.name.endswith(Settings.currentFilename))
+                if Settings.inputTagfile != "" else True
             )
         )
 
@@ -296,9 +310,8 @@ class Collector(object):
             sp = subprocess.Popen(args, stdout=subprocess.PIPE)
             (out, _) = sp.communicate()
 
-            reTag = re.compile('^([^\t]+)\t([^\t]+)\t([^\t]+);"\t.*$')
             for ln in out.split("\n"):
-                mo = reTag.search(ln)
+                mo = Settings.reTagEntry.search(ln)
                 if not mo is None:
                     tag = mo.group(1, 2, 3)
                     self.addTag(tag)
@@ -350,8 +363,17 @@ class Collector(object):
                     writer.writeLine(
                         '%s\t%s\t%s;"\tmacro' % (
                             tag[0], # macro name
-                            tag[1], # ex command
-                            tag[2] # line number
+                            tag[1], # filename
+                            tag[2] # ex command (e.g. line number)
+                        )
+                    )
+                elif len(tag) == 4: # tag sourced from input tagfile
+                    writer.writeLine(
+                        '%s\t%s\t%s;"\t%s' % (
+                            tag[0], # tagname
+                            tag[1], # filename
+                            tag[2], # ex command
+                            tag[3] # fields
                         )
                     )
                 else: # other tags
@@ -364,6 +386,24 @@ class Collector(object):
                             Settings.fields[tag[4]] # cursor kind
                         )
                     )
+
+    def readInputTagfile(self, fn):
+        """
+        Read input tagfile `fn' and populate `self.tags' with copies from that
+        file.
+
+        Only tags whose filename is *not* present in `Settings.inputFilenames'
+        are used to populate tags. This is to make it possible to update the
+        tags whose filename *is* present in `Settings.inputFilenames'.
+        """
+
+        with open(fn) as fo:
+            for ln in fo:
+                mo = Settings.reTagEntry.search(ln)
+                if not mo is None:
+                    tag = mo.group(1, 2, 3, 4)
+                    if not tag[1] in Settings.inputFilenames:
+                        self.addTag(tag)
 
 class Writer(object):
     """
@@ -433,6 +473,9 @@ def main(argv):
 
     Settings.parseArgv(argv)
 
+    if Settings.inputTagfile != "":
+        collector.readInputTagfile(Settings.inputTagfile)
+
     args = []
     args.extend(["-" + c for c in Settings.cxxFlags])
     args.extend(["-I" + i for i in Settings.userIncludes])
@@ -440,6 +483,7 @@ def main(argv):
     args.extend(["-D" + d for d in Settings.defines])
 
     for filename in Settings.inputFilenames:
+        Settings.currentFilename = filename
         index = Index.create()
         errors = []
         try:
