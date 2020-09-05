@@ -41,8 +41,8 @@ optional arguments:
   -t <filename>, --tagfile <filename>
                         Input tagfile. The purpose of this option is to allow
                         incremental updates of tagfiles. When this option is
-                        specified the collection of tags is limited to the
-                        input C++ source files exclusively, i.e. the logic for
+                        specified collecting of tags is limited to the input
+                        C++ source files exclusively, i.e. the logic for
                         collecting tags from files that are directly or
                         indirectly #included is disabled.
 ```
