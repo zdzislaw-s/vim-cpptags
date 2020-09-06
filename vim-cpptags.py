@@ -65,24 +65,24 @@ class Settings(object):
     inputTagfile = ""
     inputFilenames = []
     fieldsDefs = {
-        CursorKind.CLASS_DECL: "class-def",
-        CursorKind.ENUM_CONSTANT_DECL: "enum-constant-def",
-        CursorKind.ENUM_DECL: "enum-def",
-        CursorKind.FIELD_DECL: "field-def",
-        CursorKind.FUNCTION_DECL: "function-def",
-        CursorKind.PARM_DECL: "param-def",
-        CursorKind.STRUCT_DECL: "struct-def",
-        CursorKind.TYPE_ALIAS_DECL: "type-alias",
-        CursorKind.TYPEDEF_DECL: "typedef-def",
-        CursorKind.UNION_DECL: "union-def"
+        CursorKind.CLASS_DECL: "kind:c\tcursor:class-def",
+        CursorKind.ENUM_CONSTANT_DECL: "kind:e\tcursor:enum-constant-def",
+        CursorKind.ENUM_DECL: "kind:g\tcursor:enum-def",
+        CursorKind.FIELD_DECL: "kind:m\tcursor:field-def",
+        CursorKind.FUNCTION_DECL: "kind:f\tcursor:function-def",
+        CursorKind.PARM_DECL: "kind:l\tcursor:param-def",
+        CursorKind.STRUCT_DECL: "kind:s\tcursor:struct-def",
+        CursorKind.TYPE_ALIAS_DECL: "kind:t\tcursor:type-alias",
+        CursorKind.TYPEDEF_DECL: "kind:t\tcursor:typedef-def",
+        CursorKind.UNION_DECL: "kind:u\tcursor:union-def"
     }
     fields = {
-        CursorKind.CLASS_TEMPLATE: "class-template",
-        CursorKind.CONSTRUCTOR: "ctor",
-        CursorKind.CXX_METHOD: "method",
-        CursorKind.DESTRUCTOR: "dtor",
-        CursorKind.FUNCTION_TEMPLATE: "function-template",
-        CursorKind.VAR_DECL: "var-decl"
+        CursorKind.CLASS_TEMPLATE: "kind:t\tcursor:class-template",
+        CursorKind.CONSTRUCTOR: "kind:f\tcursor:ctor",
+        CursorKind.CXX_METHOD: "kind:f\tcursor:method",
+        CursorKind.DESTRUCTOR: "kind:f\tcursor:dtor",
+        CursorKind.FUNCTION_TEMPLATE: "kind:f\tcursor:function-template",
+        CursorKind.VAR_DECL: "kind:v\tcursor:var-decl"
     }
     fields.update(fieldsDefs)
     reTagEntry = re.compile('^([^\t]+)\t([^\t]+)\t([^\t]+);"\t(.*)$')
@@ -218,6 +218,7 @@ class Collector(object):
         if not hasattr(child.location.file, 'name'):
             return False
         return (
+            (len(child.spelling) > 0) and
             (child.kind in Settings.fields) and
             (
                 next(
@@ -229,8 +230,10 @@ class Collector(object):
                 ) is None
                 if not Settings.shouldCollectSystemIncludes else True
             ) and
-            (len(child.spelling) > 0) and
-            (child.is_definition() if child.kind in Settings.fieldsDefs else True) and
+            (
+                child.is_definition()
+                if child.kind in Settings.fieldsDefs else True
+            ) and
             (
                 (
                     child.semantic_parent.kind == CursorKind.TRANSLATION_UNIT or
@@ -240,7 +243,7 @@ class Collector(object):
                 if child.kind == CursorKind.VAR_DECL else True
             ) and
             (
-                (child.location.file.name.endswith(Settings.currentFilename))
+                child.location.file.name.endswith(Settings.currentFilename)
                 if Settings.inputTagfile != "" else True
             )
         )
@@ -358,14 +361,14 @@ class Collector(object):
             if not tag is None:
                 if len(tag) == 2: # file tag
                     writer.writeLine(
-                        '%s\t%s\t1;"\tfile' % (
+                        '%s\t%s\t1;"\tkind:F' % (
                             tag[0], # basename
                             tag[1] # filename
                         )
                     )
                 elif len(tag) == 3: # macro definition tag
                     writer.writeLine(
-                        '%s\t%s\t%s;"\tmacro' % (
+                        '%s\t%s\t%s;"\tkind:d' % (
                             tag[0], # macro name
                             tag[1], # filename
                             tag[2] # ex command (e.g. line number)
