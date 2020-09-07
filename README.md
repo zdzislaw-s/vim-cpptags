@@ -69,5 +69,5 @@ $ vim-cpptags.py \
 ```
 
 Related repositories:
-- [my fork of vim-code-dark](https://github.com/zdzislaw-s/vim-code-dark/tree/dot-vim-tracking)
-- [my fork of taghighlight-automirror](https://github.com/zdzislaw-s/taghighlight-automirror/tree/zdzislaw-s-modifications)
+- [this fork of vim-code-dark](https://github.com/zdzislaw-s/vim-code-dark/tree/dot-vim-tracking)
+- [this fork of taghighlight-automirror](https://github.com/zdzislaw-s/taghighlight-automirror/tree/zdzislaw-s-modifications)
