@@ -490,6 +490,8 @@ def main(argv):
     args.extend(["-D" + d for d in Settings.defines])
 
     for filename in Settings.inputFilenames:
+        sys.stderr.write(">>> Parsing: %s...\n" % (filename))
+
         Settings.currentFilename = filename
         index = Index.create()
         errors = []
