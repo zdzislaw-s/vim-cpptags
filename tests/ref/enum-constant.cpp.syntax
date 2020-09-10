@@ -1,0 +1,2 @@
+syntax keyword Constant EnumConstant
+syntax keyword cppUserType E

@@ -1,0 +1,2 @@
+syntax keyword Function MethodTemplate FunctionTemplate
+syntax keyword cppUserType C

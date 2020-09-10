@@ -1,0 +1,2 @@
+syntax keyword Identifier Field
+syntax keyword cppUserType C

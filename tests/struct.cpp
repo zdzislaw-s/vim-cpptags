@@ -1,0 +1,5 @@
+struct Struct;
+
+struct Struct
+{
+};

@@ -1,0 +1,5 @@
+union Union;
+
+union Union
+{
+};

@@ -1,0 +1,3 @@
+syntax keyword Identifier Extern Var
+syntax keyword Function F
+syntax keyword cppUserType C

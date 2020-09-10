@@ -1,0 +1,2 @@
+syntax keyword Function ~Dtor
+syntax keyword cppUserType Dtor

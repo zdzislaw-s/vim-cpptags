@@ -1,0 +1,2 @@
+syntax keyword Identifier Param
+syntax keyword Function F

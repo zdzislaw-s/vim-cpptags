@@ -1,0 +1,11 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	0	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Zdzislaw Sliwinski	//
+!_TAG_PROGRAM_NAME	vim-cpptags.py	//
+!_TAG_PROGRAM_URL	http://github.com/zdzislaw-s/vim-cpptags	//
+function-template.cpp	function-template.cpp	1;"	kind:F
+FunctionTemplate	function-template.cpp	:call cursor(2,6)|;"	cursor:function-template
+FunctionTemplate	function-template.cpp	:call cursor(5,6)|;"	cursor:function-template
+C	function-template.cpp	:call cursor(7,7)|;"	cursor:class
+MethodTemplate	function-template.cpp	:call cursor(10,10)|;"	cursor:function-template
+MethodTemplate	function-template.cpp	:call cursor(14,9)|;"	cursor:function-template
