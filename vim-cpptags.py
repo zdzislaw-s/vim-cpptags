@@ -61,31 +61,10 @@ class Settings(object):
     systemIncludes = []
     shouldCollectSystemIncludes = True
     shouldUseCtags = True
-    outputFilename = ""
     inputTagfile = ""
     inputFilenames = []
-    fieldsDefs = {
-        CursorKind.CLASS_DECL: "kind:c\tcursor:class-def",
-        CursorKind.ENUM_CONSTANT_DECL: "kind:e\tcursor:enum-constant-def",
-        CursorKind.ENUM_DECL: "kind:g\tcursor:enum-def",
-        CursorKind.FIELD_DECL: "kind:m\tcursor:field-def",
-        CursorKind.FUNCTION_DECL: "kind:f\tcursor:function-def",
-        CursorKind.PARM_DECL: "kind:l\tcursor:param-def",
-        CursorKind.STRUCT_DECL: "kind:s\tcursor:struct-def",
-        CursorKind.TYPE_ALIAS_DECL: "kind:t\tcursor:type-alias",
-        CursorKind.TYPEDEF_DECL: "kind:t\tcursor:typedef-def",
-        CursorKind.UNION_DECL: "kind:u\tcursor:union-def"
-    }
-    fields = {
-        CursorKind.CLASS_TEMPLATE: "kind:t\tcursor:class-template",
-        CursorKind.CONSTRUCTOR: "kind:f\tcursor:ctor",
-        CursorKind.CXX_METHOD: "kind:f\tcursor:method",
-        CursorKind.DESTRUCTOR: "kind:f\tcursor:dtor",
-        CursorKind.FUNCTION_TEMPLATE: "kind:f\tcursor:function-template",
-        CursorKind.VAR_DECL: "kind:v\tcursor:var-decl"
-    }
-    fields.update(fieldsDefs)
-    reTagEntry = re.compile('^([^\t]+)\t([^\t]+)\t([^\t]+);"\t(.*)$')
+    outputTagfile = ""
+    outputSyntaxfile = ""
     currentFilename = ""
 
     @staticmethod
@@ -95,7 +74,7 @@ class Settings(object):
         """
 
         parser = argparse.ArgumentParser(
-            description="Generate tagfile for C++ source code."
+            description="Generate tagfile and syntax file for C++ source code."
         )
         parser.add_argument(
             "--libclang",
@@ -156,13 +135,6 @@ class Settings(object):
             help="Don't use ctags to collect macro definitions."
         )
         parser.add_argument(
-            "-o",
-            dest="output_filename",
-            metavar="<filename>",
-            default=Settings.outputFilename,
-            help="Output filename. The tags are written to stdout if this option is not specified."
-        )
-        parser.add_argument(
             "-t", "--tagfile",
             metavar="<filename>",
             default=Settings.inputTagfile,
@@ -175,6 +147,20 @@ class Settings(object):
             default=[],
             help="Input C++ source file."
         )
+        parser.add_argument(
+            "-o",
+            dest="output_tagfile",
+            metavar="<filename>",
+            default=None,
+            help="Output tagfile. No output is produced if this option is not specified. If the <filename> is '-' the output tagfile is sent to stdout."
+        )
+        parser.add_argument(
+            "-s",
+            dest="output_syntaxfile",
+            metavar="<filename>",
+            default=None,
+            help="Output syntax file. No output is produced if this option is not specified. If the <filename> is '-' the output syntax file is sent to stdout."
+        )
         args = parser.parse_args(argv[1:])
 
         Settings.libclangSo = args.libclang
@@ -185,9 +171,10 @@ class Settings(object):
         Settings.systemIncludes = args.system_includes
         Settings.shouldCollectSystemIncludes = not args.no_collect_system_includes
         Settings.shouldUseCtags = not args.no_use_ctags
-        Settings.outputFilename = args.output_filename
         Settings.inputTagfile = args.tagfile
         Settings.inputFilenames = args.filenames
+        Settings.outputTagfile = args.output_tagfile
+        Settings.outputSyntaxfile = args.output_syntaxfile
 
 class Collector(object):
     """
@@ -202,8 +189,24 @@ class Collector(object):
       only if they were not previously collected.
     """
 
+    fieldsDefs = {}
+    fields = {}
+    reTagEntry = re.compile(r'^([^\t]+)\t([^\t]+)\t([^\t]+);"\t(.*)$')
+    reDefine = re.compile(r'^(\w+).*$')
+    reFunctionTemplate = re.compile('^(.*)<[^>]*>$')
+
     def __init__(self):
         self.tags = []
+        self.types = set()
+        self.constants = set()
+        self.functions = set()
+        self.identifiers = set()
+        self.syntaxGroups = [
+            [ "Identifier", self.identifiers ], # lowest priority first
+            [ "Function", self.functions ],
+            [ "Constant", self.constants ],
+            [ "cppUserType", self.types ]
+        ]
 
     @staticmethod
     def canCollect(child):
@@ -219,7 +222,7 @@ class Collector(object):
             return False
         return (
             (len(child.spelling) > 0) and
-            (child.kind in Settings.fields) and
+            (child.kind in Collector.fields) and
             (
                 next(
                     (
@@ -232,15 +235,7 @@ class Collector(object):
             ) and
             (
                 child.is_definition()
-                if child.kind in Settings.fieldsDefs else True
-            ) and
-            (
-                (
-                    child.semantic_parent.kind == CursorKind.TRANSLATION_UNIT or
-                    child.semantic_parent.kind == CursorKind.CLASS_DECL or
-                    child.semantic_parent.kind == CursorKind.STRUCT_DECL
-                )
-                if child.kind == CursorKind.VAR_DECL else True
+                if child.kind in Collector.fieldsDefs else True
             ) and
             (
                 child.location.file.name.endswith(Settings.currentFilename)
@@ -276,17 +271,19 @@ class Collector(object):
         """
 
         if Collector.canCollect(child):
+            name = Collector.fields[child.kind][1](self, child.spelling)
             filename = child.location.file.name
+
+            tag = (os.path.basename(filename), filename)
+            self.addTag(tag)
+
             tag = (
-                child.spelling,
+                name,
                 filename,
                 child.location.line,
                 child.location.column,
                 child.kind
             )
-            self.addTag(tag)
-
-            tag = (os.path.basename(filename), filename)
             self.addTag(tag)
 
         self.collectChildTags(child.get_children())
@@ -317,10 +314,19 @@ class Collector(object):
             (out, _) = sp.communicate()
 
             for ln in out.split("\n"):
-                mo = Settings.reTagEntry.search(ln)
+                mo = Collector.reTagEntry.search(ln)
                 if not mo is None:
                     tag = mo.group(1, 2, 3)
                     self.addTag(tag)
+                    self.addConstant(tag[0])
+
+            for d in Settings.defines:
+                mo = Collector.reDefine.search(d)
+                if not mo is None:
+                    name = mo.group(1)
+                    tag = ( name, "<command-line>", "0" )
+                    self.addTag(tag)
+                    self.addConstant(tag[0])
 
     def addTag(self, tag):
         """
@@ -334,9 +340,73 @@ class Collector(object):
         if Settings.shouldSort:
             heapq.heappush(self.tags, tag)
         else:
-            #print tag
             if not tag in self.tags:
                 self.tags.append(tag)
+
+    @staticmethod
+    def isAllowedName(name):
+        """
+        Filter out names that are options to Vim's syntax commands.
+        """
+
+        return not name in [
+            "cchar",
+            "conceal",
+            "concealends",
+            "contained",
+            "containedin",
+            "contains",
+            "display",
+            "extend",
+            "fold",
+            "nextgroup",
+            "oneline",
+            "skipempty",
+            "skipnl",
+            "skipwhite",
+            "transparent"
+        ]
+
+    def addType(self, name):
+        """
+        Add `name' to `self.types'.
+        """
+
+        if Collector.isAllowedName(name):
+            self.types.add(name)
+        return name
+
+    def addConstant(self, name):
+        """
+        Add `name' to `self.constants'.
+        """
+
+        if Collector.isAllowedName(name):
+            self.constants.add(name)
+        return name
+
+    def addFunction(self, name):
+        """
+        Add `name' to `self.functions'.
+
+        `name' is not added to `self.functions' if it is operator function.
+        If `name' is of form 'fn<T>' (i.e. it is function template) the template
+        arguments are removed before adding, i.e. 'fn<T> becomes 'fn'.
+        """
+
+        if Collector.isAllowedName(name) and not name.startswith("operator"):
+            name = Collector.reFunctionTemplate.sub(r"\1", name)
+            self.functions.add(name)
+        return name
+
+    def addIdentifier(self, name):
+        """
+        Add `name' to `self.identifiers'.
+        """
+
+        if Collector.isAllowedName(name):
+            self.identifiers.add(name)
+        return name
 
     def writeTags(self, writer):
         """
@@ -383,18 +453,37 @@ class Collector(object):
                             tag[3] # fields
                         )
                     )
-                else: # other tags
+                else: # cursor kind tags
                     writer.writeLine(
                         '%s\t%s\t:call cursor(%d,%d)|;"\t%s' % (
                             tag[0], # tagname
                             tag[1], # filename
                             tag[2], # line number
                             tag[3], # column number
-                            Settings.fields[tag[4]] # cursor kind
+                            Collector.fields[tag[4]][0] # cursor kind
                         )
                     )
 
-    def readInputTagfile(self, fn):
+    def writeSyntaxGroups(self, writer):
+        """
+        Write out `self.syntaxGroups' on the provided `writer'.
+        """
+
+        for sg in self.syntaxGroups:
+            if len(sg[1]) > 0:
+                self.writeSyntaxGroup(writer, sg)
+
+    def writeSyntaxGroup(self, writer, group):
+        """
+        Write out `group' on the provided `writer'.
+        """
+
+        writer.write("syntax keyword " + group[0])
+        for kw in group[1]:
+            writer.write(" " + kw)
+        writer.write("\n")
+
+    def readTagfile(self, fn):
         """
         Read input tagfile `fn' and populate `self.tags' with copies from that
         file.
@@ -406,11 +495,72 @@ class Collector(object):
 
         with open(fn) as fo:
             for ln in fo:
-                mo = Settings.reTagEntry.search(ln)
+                mo = Collector.reTagEntry.search(ln)
                 if not mo is None:
                     tag = mo.group(1, 2, 3, 4)
                     if not tag[1] in Settings.inputFilenames:
                         self.addTag(tag)
+
+    def writeTagfile(self, fn, progname):
+        """
+        Write output tagfile to file designated by `fn'.
+        """
+
+        if fn == "-":
+            writer = WriterStdout()
+        else:
+            writer = WriterFile(fn)
+
+        writer.writeLines([
+'!_TAG_FILE_FORMAT\t2\t/extended format; --format=1 will not append ;" to lines/',
+'!_TAG_FILE_SORTED\t%d\t/0=unsorted, 1=sorted, 2=foldcase/' % (
+    1 if Settings.shouldSort else 0
+),
+'!_TAG_PROGRAM_AUTHOR\tZdzislaw Sliwinski\t//',
+'!_TAG_PROGRAM_NAME\t%s\t//' % (progname),
+'!_TAG_PROGRAM_URL\thttp://github.com/zdzislaw-s/vim-cpptags\t//'
+        ])
+        self.writeTags(writer)
+
+    def writeSyntaxfile(self, fn):
+        """
+        Write output syntax file to file designated by `fn'.
+        """
+
+        if fn == "-":
+            writer = WriterStdout()
+        else:
+            writer = WriterFile(fn)
+
+        n = len(self.syntaxGroups)
+        for i in range(n):
+            for j in range(i + 1, n):
+                self.syntaxGroups[i][1] -= self.syntaxGroups[j][1]
+
+        self.writeSyntaxGroups(writer)
+
+    fieldsDefs = {
+        CursorKind.CLASS_DECL: ( "cursor:class", addType ),
+        CursorKind.STRUCT_DECL: ( "cursor:struct", addType ),
+        CursorKind.UNION_DECL: ( "cursor:union", addType ),
+        CursorKind.CLASS_TEMPLATE: ( "cursor:class-template", addType ),
+    }
+    fields = {
+        CursorKind.TYPEDEF_DECL: ( "cursor:typedef", addType ),
+        CursorKind.TYPE_ALIAS_DECL: ( "cursor:type-alias", addType ),
+        CursorKind.NAMESPACE: ( "cursor:namespace", addType ),
+        CursorKind.ENUM_DECL: ( "cursor:enum", addType ),
+        CursorKind.ENUM_CONSTANT_DECL: ( "cursor:enum-constant", addConstant ),
+        CursorKind.FUNCTION_DECL: ( "cursor:function", addFunction ),
+        CursorKind.CONSTRUCTOR: ( "cursor:ctor", addFunction ),
+        CursorKind.DESTRUCTOR: ( "cursor:dtor", addFunction ),
+        CursorKind.CXX_METHOD: ( "cursor:method", addFunction ),
+        CursorKind.FIELD_DECL: ( "cursor:field", addIdentifier ),
+        CursorKind.PARM_DECL: ( "cursor:param", addIdentifier ),
+        CursorKind.VAR_DECL: ( "cursor:var", addIdentifier ),
+        CursorKind.FUNCTION_TEMPLATE: ( "cursor:function-template", addFunction ),
+    }
+    fields.update(fieldsDefs)
 
 class Writer(object):
     """
@@ -420,17 +570,24 @@ class Writer(object):
     def __init__(self, fo):
         self.fileObject = fo
 
-    def writeLine(self, line):
+    def write(self, text):
         """
-        Write out `line', followed by LF, to the maintained file object.
+        Write out text to the maintained file object.
         """
 
-        self.fileObject.write(line)
+        self.fileObject.write(text)
+
+    def writeLine(self, line):
+        """
+        Write out `line', followed by LF.
+        """
+
+        self.write(line)
         self.fileObject.write("\n")
 
     def writeLines(self, lines):
         """
-        Write out `lines' to the maintained file object.
+        Write out `lines'.
         """
 
         for ln in lines:
@@ -463,8 +620,8 @@ def main(argv):
     Main entry point of the script.
 
     Configure clang library, parse the input arguments, parse the input files,
-    collect tags and write out the tags to the specified output (file or
-    stdout).
+    collect tags and write out tags and syntax groups to the specified output
+    (file or stdout).
 
     The function exits with error code == 1 when error occurs.
 
@@ -481,7 +638,7 @@ def main(argv):
     Settings.parseArgv(argv)
 
     if Settings.inputTagfile != "":
-        collector.readInputTagfile(Settings.inputTagfile)
+        collector.readTagfile(Settings.inputTagfile)
 
     args = []
     args.extend(["-" + c for c in Settings.cxxFlags])
@@ -515,22 +672,12 @@ def main(argv):
 
         collector.collectTags(tu)
 
-    if Settings.outputFilename == "":
-        writer = WriterStdout()
-    else:
-        writer = WriterFile(Settings.outputFilename)
+    if not Settings.outputTagfile is None:
+        collector.writeTagfile(Settings.outputTagfile, os.path.basename(argv[0]))
 
-    writer.writeLines([
-'!_TAG_FILE_FORMAT\t2\t/extended format; --format=1 will not append ;" to lines/',
-'!_TAG_FILE_SORTED\t%d\t/0=unsorted, 1=sorted, 2=foldcase/' % (
-    1 if Settings.shouldSort else 0
-),
-'!_TAG_PROGRAM_AUTHOR\tZdzislaw Sliwinski\t//',
-'!_TAG_PROGRAM_NAME\t%s\t//' % (os.path.basename(argv[0])),
-'!_TAG_PROGRAM_URL\thttp://github.com/zdzislaw-s/vim-cpptags\t//'
-    ])
+    if not Settings.outputSyntaxfile is None:
+        collector.writeSyntaxfile(Settings.outputSyntaxfile)
 
-    collector.writeTags(writer)
     return 0
 
 if __name__ == "__main__":
