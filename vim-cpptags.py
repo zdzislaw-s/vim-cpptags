@@ -24,7 +24,6 @@
 # SOFTWARE.
 
 import argparse
-import heapq
 import os
 import re
 import subprocess
@@ -196,7 +195,7 @@ class Collector(object):
     reFunctionTemplate = re.compile('^(.*)<[^>]*>$')
 
     def __init__(self):
-        self.tags = []
+        self.tags = set()
         self.types = set()
         self.constants = set()
         self.functions = set()
@@ -209,7 +208,7 @@ class Collector(object):
         ]
 
     @staticmethod
-    def canCollect(child):
+    def canCollectTag(child):
         """
         Determine whether the cursor `child' is collectable.
 
@@ -218,10 +217,7 @@ class Collector(object):
         False -- otherwise
         """
 
-        if not hasattr(child.location.file, 'name'):
-            return False
         return (
-            (len(child.spelling) > 0) and
             (child.kind in Collector.fields) and
             (
                 next(
@@ -251,26 +247,26 @@ class Collector(object):
         macro definitions.
         """
 
-        self.collectChildTags(tu.cursor.get_children())
+        self.collectCursorTags(tu.cursor.get_children())
         if Settings.shouldUseCtags:
             self.collectMacroTags()
 
-    def collectChildTags(self, children):
+    def collectCursorTags(self, children):
         """
         Collect tags from each cursor in `children'.
         """
 
         for c in children:
-            self.collectChildTag(c)
+            self.collectCursorTag(c)
 
-    def collectChildTag(self, child):
+    def collectCursorTag(self, child):
         """
         Collect a tag from `child'.
 
         Also, collect a tag for the file that is indicated by `child'.
         """
 
-        if Collector.canCollect(child):
+        if Collector.canCollectTag(child):
             name = Collector.fields[child.kind][1](self, child.spelling)
             filename = child.location.file.name
 
@@ -286,7 +282,7 @@ class Collector(object):
             )
             self.addTag(tag)
 
-        self.collectChildTags(child.get_children())
+        self.collectCursorTags(child.get_children())
 
     def collectMacroTags(self):
         """
@@ -304,7 +300,6 @@ class Collector(object):
             args = [
                 "ctags",
                 "--c++-kinds=d",
-                "--sort=%s" % ("yes" if Settings.shouldSort else "no"),
                 "-o",
                 "-",
             ]
@@ -331,49 +326,16 @@ class Collector(object):
     def addTag(self, tag):
         """
         Add `tag' to `self.tags'.
-
-        Depending on the value of `Settings.shouldSort', `tag' is added to
-        either a heapq (`Settings.shouldSort' == True) or a list
-        (`Settings.shouldSort' == False).
         """
 
-        if Settings.shouldSort:
-            heapq.heappush(self.tags, tag)
-        else:
-            if not tag in self.tags:
-                self.tags.append(tag)
-
-    @staticmethod
-    def isAllowedName(name):
-        """
-        Filter out names that are options to Vim's syntax commands.
-        """
-
-        return not name in [
-            "cchar",
-            "conceal",
-            "concealends",
-            "contained",
-            "containedin",
-            "contains",
-            "display",
-            "extend",
-            "fold",
-            "nextgroup",
-            "oneline",
-            "skipempty",
-            "skipnl",
-            "skipwhite",
-            "transparent"
-        ]
+        self.tags.add(tag)
 
     def addType(self, name):
         """
         Add `name' to `self.types'.
         """
 
-        if Collector.isAllowedName(name):
-            self.types.add(name)
+        self.types.add(name)
         return name
 
     def addConstant(self, name):
@@ -381,8 +343,7 @@ class Collector(object):
         Add `name' to `self.constants'.
         """
 
-        if Collector.isAllowedName(name):
-            self.constants.add(name)
+        self.constants.add(name)
         return name
 
     def addFunction(self, name):
@@ -394,7 +355,7 @@ class Collector(object):
         arguments are removed before adding, i.e. 'fn<T> becomes 'fn'.
         """
 
-        if Collector.isAllowedName(name) and not name.startswith("operator"):
+        if not name.startswith("operator"):
             name = Collector.reFunctionTemplate.sub(r"\1", name)
             self.functions.add(name)
         return name
@@ -404,8 +365,7 @@ class Collector(object):
         Add `name' to `self.identifiers'.
         """
 
-        if Collector.isAllowedName(name):
-            self.identifiers.add(name)
+        self.identifiers.add(name)
         return name
 
     def writeTags(self, writer):
@@ -417,52 +377,47 @@ class Collector(object):
         no duplicates already).
         """
 
-        lastTag = None
-        for i in range(len(self.tags)):
-            if Settings.shouldSort:
-                tag = heapq.heappop(self.tags)
-                if tag != lastTag:
-                    lastTag = tag
-                else:
-                    tag = None
-            else:
-                tag = self.tags[i]
+        if Settings.shouldSort:
+            self.tags = sorted(self.tags)
 
-            if not tag is None:
-                if len(tag) == 2: # file tag
-                    writer.writeLine(
-                        '%s\t%s\t1;"\tkind:F' % (
-                            tag[0], # basename
-                            tag[1] # filename
-                        )
+        for tag in self.tags:
+            if len(tag[0]) == 0:
+                continue
+
+            if len(tag) == 2: # file tag
+                writer.writeLine(
+                    '%s\t%s\t1;"\tkind:F' % (
+                        tag[0], # basename
+                        tag[1] # filename
                     )
-                elif len(tag) == 3: # macro definition tag
-                    writer.writeLine(
-                        '%s\t%s\t%s;"\tkind:d' % (
-                            tag[0], # macro name
-                            tag[1], # filename
-                            tag[2] # ex command (e.g. line number)
-                        )
+                )
+            elif len(tag) == 3: # macro definition tag
+                writer.writeLine(
+                    '%s\t%s\t%s;"\tkind:d' % (
+                        tag[0], # macro name
+                        tag[1], # filename
+                        tag[2] # ex command (e.g. line number)
                     )
-                elif len(tag) == 4: # tag sourced from input tagfile
-                    writer.writeLine(
-                        '%s\t%s\t%s;"\t%s' % (
-                            tag[0], # tagname
-                            tag[1], # filename
-                            tag[2], # ex command
-                            tag[3] # fields
-                        )
+                )
+            elif len(tag) == 4: # tag sourced from input tagfile
+                writer.writeLine(
+                    '%s\t%s\t%s;"\t%s' % (
+                        tag[0], # tagname
+                        tag[1], # filename
+                        tag[2], # ex command
+                        tag[3] # fields
                     )
-                else: # cursor kind tags
-                    writer.writeLine(
-                        '%s\t%s\t:call cursor(%d,%d)|;"\t%s' % (
-                            tag[0], # tagname
-                            tag[1], # filename
-                            tag[2], # line number
-                            tag[3], # column number
-                            Collector.fields[tag[4]][0] # cursor kind
-                        )
+                )
+            else: # cursor kind tags
+                writer.writeLine(
+                    '%s\t%s\t:call cursor(%d,%d)|;"\t%s' % (
+                        tag[0], # tagname
+                        tag[1], # filename
+                        tag[2], # line number
+                        tag[3], # column number
+                        Collector.fields[tag[4]][0] # cursor kind
                     )
+                )
 
     def writeSyntaxGroups(self, writer):
         """
@@ -527,6 +482,24 @@ class Collector(object):
         Write output syntax file to file designated by `fn'.
         """
 
+        disallowedNames = {
+            "cchar",
+            "conceal",
+            "concealends",
+            "contained",
+            "containedin",
+            "contains",
+            "display",
+            "extend",
+            "fold",
+            "nextgroup",
+            "oneline",
+            "skipempty",
+            "skipnl",
+            "skipwhite",
+            "transparent"
+        }
+
         if fn == "-":
             writer = WriterStdout()
         else:
@@ -534,6 +507,7 @@ class Collector(object):
 
         n = len(self.syntaxGroups)
         for i in range(n):
+            self.syntaxGroups[i][1] -= disallowedNames
             for j in range(i + 1, n):
                 self.syntaxGroups[i][1] -= self.syntaxGroups[j][1]
 
@@ -653,7 +627,10 @@ def main(argv):
         index = Index.create()
         errors = []
         try:
-            tu = index.parse(filename, args=args)
+            tu = index.parse(
+                filename,
+                args=args
+            )
             errors = [
                 repr(d) for d in tu.diagnostics
                     if d.severity in (

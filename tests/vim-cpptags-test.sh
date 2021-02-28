@@ -3,7 +3,7 @@ if [ ! -d out ]; then
 fi
 
 for fn in *.cpp; do
-    ../vim-cpptags.py $fn -S -o out/$fn.tags -s out/$fn.syntax
+    ../vim-cpptags.py $fn -o out/$fn.tags -s out/$fn.syntax
     if ! diff ref/$fn.tags out/$fn.tags; then
        echo "out/$fn.tags differs from ref"
     fi

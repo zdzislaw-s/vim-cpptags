@@ -1,9 +1,9 @@
 !_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
-!_TAG_FILE_SORTED	0	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
 !_TAG_PROGRAM_AUTHOR	Zdzislaw Sliwinski	//
 !_TAG_PROGRAM_NAME	vim-cpptags.py	//
 !_TAG_PROGRAM_URL	http://github.com/zdzislaw-s/vim-cpptags	//
-method.cpp	method.cpp	1;"	kind:F
 C	method.cpp	:call cursor(1,7)|;"	cursor:class
 Method	method.cpp	:call cursor(3,10)|;"	cursor:method
 Method	method.cpp	:call cursor(6,9)|;"	cursor:method
+method.cpp	method.cpp	1;"	kind:F
