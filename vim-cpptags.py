@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#! /usr/bin/env python3
 # vim: set fileencoding=utf-8 :
 #
 # MIT License
@@ -307,6 +307,7 @@ class Collector(object):
 
             sp = subprocess.Popen(args, stdout=subprocess.PIPE)
             (out, _) = sp.communicate()
+            out = out.decode("utf-8")
 
             for ln in out.split("\n"):
                 mo = Collector.reTagEntry.search(ln)
@@ -378,7 +379,7 @@ class Collector(object):
         """
 
         if Settings.shouldSort:
-            self.tags = sorted(self.tags)
+            self.tags = sorted(self.tags, key=lambda tag: str(tag))
 
         for tag in self.tags:
             if len(tag[0]) == 0:
@@ -606,10 +607,10 @@ def main(argv):
     0 -- on success
     """
 
+    Settings.parseArgv(argv)
+
     Config.set_library_file(Settings.libclangSo)
     collector = Collector()
-
-    Settings.parseArgv(argv)
 
     if Settings.inputTagfile != "":
         collector.readTagfile(Settings.inputTagfile)
